@@ -24,14 +24,14 @@ Stage 2 - SHOW:
 
 import time
 
-from escpos.printer import Serial
+from escpos.printer import Serial as escSerial
 
 # ============================== CONFIG ==============================
 
 # Serial ports for the three printers, in physical order along the strip.
-PORT_1 = "COM9"
-PORT_2 = "COM10"
-PORT_3 = "COM11"
+PORT_1 = "COM11"
+PORT_2 = "COM9"
+PORT_3 = "COM10"
 
 BAUDRATE = 9600  # must match each printer's DIP-switch/config baud rate
 
@@ -40,7 +40,7 @@ BAUDRATE = 9600  # must match each printer's DIP-switch/config baud rate
 N = 30
 
 # How many marker lines printer 1 prints at the start of each N-line block.
-SYNC_MARK_LINES = 3
+SYNC_MARK_LINES = 5
 
 # Characters used for the alignment marks.
 SYNC_MARK_CHAR_P1 = "o"   # printed by printer 1
@@ -87,23 +87,27 @@ _p3 = None
 
 
 def _connect(port):
-    printer = Serial(
+    printer = escSerial(
         devfile=port,
         baudrate=BAUDRATE,
         bytesize=8,
         parity="N",
         stopbits=1,
-        timeout=1,
-        dsrdtr=True,
+        timeout=2,
+        write_timeout=2,
+        xonxoff=False,
+        rtscts=False,
+        dsrdtr=False,
     )
     printer.hw("INIT")
     printer.set(align="left", font="a", bold=False, double_height=False, double_width=False)
     return printer
 
 
-def _advance_one_line(printer, text=""):
+def _advance_one_line(printer : escSerial, text=""):
     """Print `text` (or nothing) followed by exactly one line feed."""
-    printer.text(text + "\n")
+    printer.text(text.encode())
+    printer.text(b"\n")
 
 
 def connect_all():
