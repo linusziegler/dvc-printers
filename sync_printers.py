@@ -49,10 +49,6 @@ SYNC_MARK_CHAR_OVERWRITE = "x"  # printed by printer 2 / printer 3 on top
 # Width (in characters) of each marker line, so the marks are easy to see.
 MARK_WIDTH = 32
 
-# Delay between each synced line during stage 2 (seconds). Tune to taste /
-# to give slower printers time to feed & print before the next line.
-LINE_DELAY = 0.05
-
 # Which stage to run when this script is executed. Edit and re-run:
 #   "sync" -> run the stage 1 alignment procedure
 #   "show" -> run the stage 2 synced playback loop
@@ -77,16 +73,25 @@ PRINTER3_LINES = [
     "Bar",
 ]
 
+# Pause after every single line sent to a printer. Without this the
+# printer's tiny input buffer overruns almost instantly (there's no usable
+# flow control) and the data is silently dropped instead of printed - see
+# test.py's send(), which does the same flush+sleep after every write.
+WRITE_DELAY = 0.1
+
 # ======================================================================
 
 assert N > SYNC_MARK_LINES, "N must be larger than SYNC_MARK_LINES"
 
-_p1 = None
-_p2 = None
-_p3 = None
+_p1: escSerial | None = None
+_p2: escSerial | None = None
+_p3: escSerial | None = None
 
 
 def _connect(port):
+    # NB: python-escpos's Serial.open() only ever forwards timeout, xonxoff
+    # and dsrdtr to pyserial - any other kwargs here (e.g. write_timeout,
+    # rtscts) are silently swallowed and have no effect.
     printer = escSerial(
         devfile=port,
         baudrate=BAUDRATE,
@@ -94,20 +99,22 @@ def _connect(port):
         parity="N",
         stopbits=1,
         timeout=2,
-        write_timeout=2,
         xonxoff=False,
-        rtscts=False,
         dsrdtr=False,
     )
     printer.hw("INIT")
+    time.sleep(WRITE_DELAY)
     printer.set(align="left", font="a", bold=False, double_height=False, double_width=False)
+    time.sleep(WRITE_DELAY)
     return printer
 
 
-def _advance_one_line(printer : escSerial, text=""):
+def _advance_one_line(printer: escSerial | None, text=""):
     """Print `text` (or nothing) followed by exactly one line feed."""
-    printer.text(text.encode())
-    printer.text(b"\n")
+    assert printer is not None, "connect_all() must be called before printing"
+    printer.text(text + "\n")
+    printer.device.flush()  # type: ignore[union-attr]
+    time.sleep(WRITE_DELAY)
 
 
 def connect_all():
@@ -176,7 +183,6 @@ def run_show():
             msg2 = PRINTER2_LINES[i] if i < len(PRINTER2_LINES) else ""
             msg3 = PRINTER3_LINES[i] if i < len(PRINTER3_LINES) else ""
             print_line(msg1, msg2, msg3)
-            time.sleep(LINE_DELAY)
     finally:
         disconnect_all()
 
