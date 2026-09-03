@@ -22,6 +22,8 @@ Stage 2 - SHOW:
 
 """
 
+import re
+import textwrap
 import time
 import msvcrt
 
@@ -56,13 +58,15 @@ MARK_WIDTH = 32
 #   "show" -> run the stage 2 synced playback loop
 MODE = "show"
 
-# Stage 2 content: one entry per printed row, one array per printer.
-# Leave "" for a printer on a given row to just feed a blank line there -
-# the row still advances the paper by exactly one line either way.
-# repeat line for N times
-PRINTER1_LINES = ["Printer 1 Printer 1"] * N
-PRINTER2_LINES = ["Printer 2 Printer 2"] * N
-PRINTER3_LINES = ["Printer 3 Printer 3"] * N
+# Stage 2 content: one txt file per printer. Files aren't pre-formatted for
+# the printer - they get reflowed (paragraphs rejoined, then word-wrapped to
+# LINE_WIDTH) into row arrays by load_printer_lines() below.
+PRINTER1_FILE = "printer1.txt"
+PRINTER2_FILE = "printer2.txt"
+PRINTER3_FILE = "printer3.txt"
+
+# Maximum characters per printed row.
+LINE_WIDTH = 30
 # Pause after every single line sent to a printer. Without this the
 # printer's tiny input buffer overruns almost instantly (there's no usable
 # flow control) and the data is silently dropped instead of printed - see
@@ -76,6 +80,27 @@ assert N > SYNC_MARK_LINES, "N must be larger than SYNC_MARK_LINES"
 _p1: escSerial | None = None
 _p2: escSerial | None = None
 _p3: escSerial | None = None
+
+
+def load_printer_lines(filepath, width=LINE_WIDTH):
+    """Read a text file and reflow it into printer rows of at most `width` chars.
+
+    Blank-line-separated paragraphs are rejoined (ignoring the source file's
+    own line breaks, which aren't at a printer-friendly width) and then
+    word-wrapped to `width` chars. A single blank row is kept between
+    paragraphs so spacing is preserved.
+    """
+    with open(filepath, "r", encoding="utf-8") as f:
+        raw = f.read()
+
+    lines = []
+    for paragraph in re.split(r"\n\s*\n", raw.strip()):
+        paragraph = " ".join(paragraph.split())
+        lines.extend(textwrap.wrap(paragraph, width=width))
+        lines.append("")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
 
 
 def _connect(port):
@@ -176,13 +201,17 @@ def print_line(print1_msg="", print2_msg="", print3_msg=""):
 
 def run_show():
     """Stage 2: walk the three message arrays, one synced line at a time."""
+    printer1_lines = load_printer_lines(PRINTER1_FILE)
+    printer2_lines = load_printer_lines(PRINTER2_FILE)
+    printer3_lines = load_printer_lines(PRINTER3_FILE)
+
     connect_all()
     try:
-        line_count = N
+        line_count = max(N, len(printer1_lines), len(printer2_lines), len(printer3_lines))
         for i in range(line_count):
-            msg1 = PRINTER1_LINES[i] if i < len(PRINTER1_LINES) else ""
-            msg2 = PRINTER2_LINES[i] if i < len(PRINTER2_LINES) else ""
-            msg3 = PRINTER3_LINES[i] if i < len(PRINTER3_LINES) else ""
+            msg1 = printer1_lines[i] if i < len(printer1_lines) else ""
+            msg2 = printer2_lines[i] if i < len(printer2_lines) else ""
+            msg3 = printer3_lines[i] if i < len(printer3_lines) else ""
             print_line(msg1, msg2, msg3)
     finally:
         disconnect_all()
