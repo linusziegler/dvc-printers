@@ -23,6 +23,7 @@ Stage 2 - SHOW:
 """
 
 import time
+import msvcrt
 
 from escpos.printer import Serial as escSerial
 
@@ -30,21 +31,22 @@ from escpos.printer import Serial as escSerial
 
 # Serial ports for the three printers, in physical order along the strip.
 PORT_1 = "COM11"
-PORT_2 = "COM9"
-PORT_3 = "COM10"
+PORT_2 = "COM10"
+PORT_3 = "COM9"
 
 BAUDRATE = 9600  # must match each printer's DIP-switch/config baud rate
 
 # Fixed physical distance between consecutive printers, in lines of text.
 # Must be greater than SYNC_MARK_LINES.
-N = 30
+N = 50
 
 # How many marker lines printer 1 prints at the start of each N-line block.
 SYNC_MARK_LINES = 5
 
 # Characters used for the alignment marks.
-SYNC_MARK_CHAR_P1 = "o"   # printed by printer 1
-SYNC_MARK_CHAR_OVERWRITE = "x"  # printed by printer 2 / printer 3 on top
+SYNC_MARK_PRE = "<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>"   # printed by printer 1
+SYNC_MARK_P1 = "ooooooo"   # printed by printer 1
+SYNC_MARK_OVERWRITE = "xxxxxxx"  # printed by printer 2 / printer 3 on top
 
 # Width (in characters) of each marker line, so the marks are easy to see.
 MARK_WIDTH = 32
@@ -52,32 +54,20 @@ MARK_WIDTH = 32
 # Which stage to run when this script is executed. Edit and re-run:
 #   "sync" -> run the stage 1 alignment procedure
 #   "show" -> run the stage 2 synced playback loop
-MODE = "sync"
+MODE = "show"
 
 # Stage 2 content: one entry per printed row, one array per printer.
 # Leave "" for a printer on a given row to just feed a blank line there -
 # the row still advances the paper by exactly one line either way.
-PRINTER1_LINES = [
-    "Hello",
-    "",
-    "World",
-]
-PRINTER2_LINES = [
-    "",
-    "Foo",
-    "",
-]
-PRINTER3_LINES = [
-    "",
-    "",
-    "Bar",
-]
-
+# repeat line for N times
+PRINTER1_LINES = ["Printer 1 Printer 1"] * N
+PRINTER2_LINES = ["Printer 2 Printer 2"] * N
+PRINTER3_LINES = ["Printer 3 Printer 3"] * N
 # Pause after every single line sent to a printer. Without this the
 # printer's tiny input buffer overruns almost instantly (there's no usable
 # flow control) and the data is silently dropped instead of printed - see
 # test.py's send(), which does the same flush+sleep after every write.
-WRITE_DELAY = 0.1
+WRITE_DELAY = 0.01
 
 # ======================================================================
 
@@ -112,7 +102,8 @@ def _connect(port):
 def _advance_one_line(printer: escSerial | None, text=""):
     """Print `text` (or nothing) followed by exactly one line feed."""
     assert printer is not None, "connect_all() must be called before printing"
-    printer.text(text + "\n")
+    printer.text(str(text))
+    printer.text("\n")
     printer.device.flush()  # type: ignore[union-attr]
     time.sleep(WRITE_DELAY)
 
@@ -130,36 +121,46 @@ def disconnect_all():
             printer.close()
 
 
+def _run_step_on_enter(prompt):
+    """Return True when Enter is pressed, or False when another key is pressed."""
+    print(prompt)
+    print("Press Enter to run this step, or any other key to skip it.")
+    key = msvcrt.getwch()
+    print()
+    return key in ("\r", "\n")
+
+
+def print_sync_sequence(printer):
+    _advance_one_line(printer, SYNC_MARK_PRE)
+    _advance_one_line(printer)
+    for _ in range(SYNC_MARK_LINES):
+        _advance_one_line(printer, SYNC_MARK_P1)
+
 def run_sync():
     """Stage 1: print alignment marks and pause for manual paper feeding."""
     connect_all()
     try:
-        input("Printer 1 loaded with paper. Press Enter to print sync markers...")
+        if _run_step_on_enter("Sync Printer 1"):
+            print_sync_sequence(_p1)
+            for _ in range(N - (SYNC_MARK_LINES + 2)):
+                _advance_one_line(_p1)
 
-        mark_line = SYNC_MARK_CHAR_P1 * MARK_WIDTH
-        for _ in range(SYNC_MARK_LINES):
-            _advance_one_line(_p1, mark_line)
-        for _ in range(N - SYNC_MARK_LINES):
-            _advance_one_line(_p1)
-        for _ in range(SYNC_MARK_LINES):
-            _advance_one_line(_p1, mark_line)
-        for _ in range(N - SYNC_MARK_LINES):
-            _advance_one_line(_p1)
+            print_sync_sequence(_p1)
+            for _ in range(N - (SYNC_MARK_LINES + 2)):
+                _advance_one_line(_p1)
 
-        input(
-            "Feed the strip into printer 2 until its head is on the FIRST "
-            "'o' marker block, then press Enter to overwrite it with 'x'..."
-        )
-        overwrite_line = SYNC_MARK_CHAR_OVERWRITE * MARK_WIDTH
-        for _ in range(SYNC_MARK_LINES):
-            _advance_one_line(_p2, overwrite_line)
+        overwrite_line = SYNC_MARK_OVERWRITE
+        if _run_step_on_enter(
+            "Sync Printer 2"
+        ):
+            for _ in range(SYNC_MARK_LINES):
+                _advance_one_line(_p2, overwrite_line)
 
-        input(
-            "Feed the strip into printer 3 until its head is on the SECOND "
-            "'o' marker block, then press Enter to overwrite it with 'x'..."
-        )
-        for _ in range(SYNC_MARK_LINES):
-            _advance_one_line(_p3, overwrite_line)
+        if _run_step_on_enter(
+            "Sync Printer 3"
+        ):
+            for _ in range(SYNC_MARK_LINES):
+                _advance_one_line(_p3, overwrite_line)
 
         print("Sync complete. Set MODE = \"show\" to run the synced playback.")
     finally:
@@ -177,7 +178,7 @@ def run_show():
     """Stage 2: walk the three message arrays, one synced line at a time."""
     connect_all()
     try:
-        line_count = max(len(PRINTER1_LINES), len(PRINTER2_LINES), len(PRINTER3_LINES))
+        line_count = N
         for i in range(line_count):
             msg1 = PRINTER1_LINES[i] if i < len(PRINTER1_LINES) else ""
             msg2 = PRINTER2_LINES[i] if i < len(PRINTER2_LINES) else ""
