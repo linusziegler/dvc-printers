@@ -1,5 +1,5 @@
-line one
-line two
-line three
-line four
-line five
+line one normal
+[bold]line two bold
+[fontb]line three font b
+[bold,fontb]line four bold font b
+line five normal
