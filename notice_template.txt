@@ -1,0 +1,17 @@
+NOTICE
+
+The Administration of the Mariupol Urban District announces the identification of a real-estate property showing signs of being ownerless, located at:
+
+{address}
+
+Any person who considers themselves the owner, or who holds rights to this property, is requested to appear IN PERSON within 30 calendar days of this notice at the Housing and Communal Services Department of the Administration, bringing a passport or other identity document and documents establishing legal title to the premises (originals and copies).
+
+A site inspection found no evidence of the presence of an owner or resident, and Rosreestr records likewise show no registered owner. The property is therefore registered as ownerless real estate. No interested party appeared to claim rights at the court hearing.
+
+The court concludes that the application for recognition of municipal ownership of this ownerless immovable property is satisfied.
+
+DECISION: {decision}
+
+{STAMP}
+
+Judge: {judge_name}
