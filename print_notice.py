@@ -26,6 +26,7 @@ Requirements: pip install python-escpos pillow
 import csv
 import re
 import textwrap
+import time
 from pathlib import Path
 
 from PIL import Image
@@ -44,6 +45,12 @@ STAMP_MARKER = "{STAMP}"
 
 LINE_WIDTH = 32  # characters per printed row
 FEED_LINES_AFTER = 6  # blank lines fed after each notice (cut point)
+
+# The printer's input buffer is tiny and silently drops data if it's
+# overrun, so every send below is flushed and paced individually (same
+# fix as WRITE_DELAY in sync_printers.py).
+WRITE_DELAY = 0.05
+IMAGE_DELAY = 1.0  # the stamp is a much bigger payload than a text line
 
 # Raw ESC/POS command to toggle upside-down character printing (ESC { n).
 UPSIDE_DOWN_ON = b"\x1b\x7b\x01"
@@ -96,13 +103,21 @@ def connect():
     return printer
 
 
+def _send(printer, delay=WRITE_DELAY):
+    """Flush whatever was just written and pause before the next send."""
+    printer.device.flush()
+    time.sleep(delay)
+
+
 def print_blocks(printer, blocks):
-    """Send blocks to the printer back-to-front, in upside-down mode."""
+    """Send blocks to the printer back-to-front, one at a time, in upside-down mode."""
     printer._raw(UPSIDE_DOWN_ON)
+    _send(printer)
 
     for kind, value in reversed(blocks):
         if kind == "text":
             printer.text(value + "\n")
+            _send(printer)
         else:
             # Raster images aren't affected by ESC {, so rotate them by hand.
             image = Image.open(value).convert("1").rotate(180)
@@ -112,9 +127,12 @@ def print_blocks(printer, blocks):
                 high_density_horizontal=True,
                 high_density_vertical=True,
             )
+            _send(printer, delay=IMAGE_DELAY)
 
     printer._raw(UPSIDE_DOWN_OFF)
+    _send(printer)
     printer.text("\n" * FEED_LINES_AFTER)
+    _send(printer)
 
 
 def load_rows(csv_file):
