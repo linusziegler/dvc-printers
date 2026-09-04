@@ -109,6 +109,17 @@ def _send(printer, delay=WRITE_DELAY):
     time.sleep(delay)
 
 
+def _text_line(printer, line):
+    """Write one line as raw CP437 bytes.
+
+    python-escpos's printer.text() "magic encodes" text, which can inject
+    code-page switch commands this printer clone doesn't understand and
+    prints as gibberish. CP437 is the ESC/POS default code page, so we
+    encode and send the bytes ourselves instead.
+    """
+    printer._raw(line.encode("cp437", errors="replace") + b"\n")
+
+
 def print_blocks(printer, blocks):
     """Send blocks to the printer back-to-front, one at a time, in upside-down mode."""
     printer._raw(UPSIDE_DOWN_ON)
@@ -116,7 +127,7 @@ def print_blocks(printer, blocks):
 
     for kind, value in reversed(blocks):
         if kind == "text":
-            printer.text(value + "\n")
+            _text_line(printer, value)
             _send(printer)
         else:
             # Raster images aren't affected by ESC {, so rotate them by hand.
@@ -131,7 +142,7 @@ def print_blocks(printer, blocks):
 
     printer._raw(UPSIDE_DOWN_OFF)
     _send(printer)
-    printer.text("\n" * FEED_LINES_AFTER)
+    printer._raw(b"\n" * FEED_LINES_AFTER)
     _send(printer)
 
 
