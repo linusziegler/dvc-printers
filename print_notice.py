@@ -7,6 +7,9 @@ Data flow (edit these, not this file, to change what gets printed):
                            {address}, {judge_name}, {decision} are filled in
                            from the CSV; a paragraph containing only the
                            literal "{STAMP}" is replaced by stamp_small.bmp.
+                           A paragraph may start with "[big]" or "[tall]" to
+                           print it at double size; otherwise it prints normal
+                           size.
     notices.csv         - one row per notice: columns address, judge_name,
                            decision. Add more columns/placeholders together
                            in both files if you need extra fields later.
@@ -56,15 +59,28 @@ IMAGE_DELAY = 1.0  # the stamp is a much bigger payload than a text line
 UPSIDE_DOWN_ON = b"\x1b\x7b\x01"
 UPSIDE_DOWN_OFF = b"\x1b\x7b\x00"
 
+# Raw ESC/POS text size command (GS ! n: high nibble = width x2, low = height x2).
+SIZE_COMMANDS = {
+    None: b"\x1d\x21\x00",
+    "normal": b"\x1d\x21\x00",
+    "tall": b"\x1d\x21\x01",
+    "big": b"\x1d\x21\x11",
+}
+
+# A paragraph may start with one of these tags in brackets to size it.
+PARAGRAPH_TAG_PATTERN = re.compile(r"^\[(big|tall|normal)\]\s*", re.IGNORECASE)
+
 # ====================================================================
 
 
 def render_blocks(template_text, data, width=LINE_WIDTH):
     """Turn the template + one CSV row into an ordered list of print blocks.
 
-    Each block is ("text", line) or ("image", path). Paragraphs are
-    separated by blank lines in the template and re-wrapped to `width`; a
-    paragraph that is only STAMP_MARKER becomes an image block instead.
+    Each block is ("text", line, size_tag) or ("image", path, None).
+    Paragraphs are separated by blank lines in the template and re-wrapped
+    to `width`; a paragraph that is only STAMP_MARKER becomes an image
+    block instead. A leading "[big]"/"[tall]" marker sizes the whole
+    paragraph.
     """
     blocks = []
     paragraphs = re.split(r"\n\s*\n", template_text.strip())
@@ -73,16 +89,23 @@ def render_blocks(template_text, data, width=LINE_WIDTH):
         paragraph = paragraph.strip()
 
         if paragraph == STAMP_MARKER:
-            blocks.append(("image", STAMP_IMAGE))
+            blocks.append(("image", STAMP_IMAGE, None))
             continue
+
+        tag_match = PARAGRAPH_TAG_PATTERN.match(paragraph)
+        if tag_match:
+            size_tag = tag_match.group(1).lower()
+            paragraph = paragraph[tag_match.end():]
+        else:
+            size_tag = None
 
         filled = paragraph.format(**data)
         joined = " ".join(filled.split())
         for line in textwrap.wrap(joined, width=width):
-            blocks.append(("text", line))
-        blocks.append(("text", ""))
+            blocks.append(("text", line, size_tag))
+        blocks.append(("text", "", size_tag))
 
-    while blocks and blocks[-1] == ("text", ""):
+    while blocks and blocks[-1][:2] == ("text", ""):
         blocks.pop()
 
     return blocks
@@ -125,8 +148,9 @@ def print_blocks(printer, blocks):
     printer._raw(UPSIDE_DOWN_ON)
     _send(printer)
 
-    for kind, value in reversed(blocks):
+    for kind, value, size_tag in reversed(blocks):
         if kind == "text":
+            printer._raw(SIZE_COMMANDS[size_tag])
             _text_line(printer, value)
             _send(printer)
         else:
@@ -140,6 +164,7 @@ def print_blocks(printer, blocks):
             )
             _send(printer, delay=IMAGE_DELAY)
 
+    printer._raw(SIZE_COMMANDS[None])
     printer._raw(UPSIDE_DOWN_OFF)
     _send(printer)
     printer._raw(b"\n" * FEED_LINES_AFTER)

@@ -1,4 +1,4 @@
-NOTICE
+[big]NOTICE
 
 The Administration of the Mariupol Urban District announces the identification of a real-estate property showing signs of being ownerless, located at:
 
@@ -10,7 +10,7 @@ A site inspection found no evidence of the presence of an owner or resident, and
 
 The court concludes that the application for recognition of municipal ownership of this ownerless immovable property is satisfied.
 
-DECISION: {decision}
+[tall]DECISION: {decision}
 
 {STAMP}
 
