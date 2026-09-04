@@ -13,8 +13,7 @@ from escpos.printer import Serial as escSerial
 PORT = "COM9"
 BAUDRATE = 9600
 
-LINE_COUNT = 5
-LINE_TEXT = "testtesttest"
+TEXT_FILE = "test_lines.txt"
 
 WRITE_DELAY = 0.05  # small pause after each send; the printer's buffer is tiny
 
@@ -31,6 +30,11 @@ def send(printer, data):
     time.sleep(WRITE_DELAY)
 
 
+def load_lines(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return [line.rstrip("\n") for line in f]
+
+
 def main():
     printer = escSerial(
         devfile=PORT,
@@ -43,12 +47,14 @@ def main():
         dsrdtr=False,
     )
 
+    lines = load_lines(TEXT_FILE)
+
     try:
         printer.hw("INIT")
         send(printer, UPSIDE_DOWN_ON)
 
-        for _ in range(LINE_COUNT):
-            send(printer, LINE_TEXT.encode("cp437") + b"\n")
+        for line in lines:
+            send(printer, line.encode("cp437") + b"\n")
 
         send(printer, UPSIDE_DOWN_OFF)
         send(printer, b"\n\n\n")
