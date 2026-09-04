@@ -3,3 +3,8 @@ line one normal
 [fontb]line three font b
 [bold,fontb]line four bold font b
 line five normal
+[underline]line six underline
+[invert]line seven invert
+[wide]line eight wide
+[tall]line nine tall
+[big]line ten big

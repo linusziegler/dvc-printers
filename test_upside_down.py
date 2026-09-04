@@ -27,10 +27,18 @@ BOLD_ON = b"\x1b\x45\x01"
 BOLD_OFF = b"\x1b\x45\x00"
 FONT_A = b"\x1b\x4d\x00"  # default font
 FONT_B = b"\x1b\x4d\x01"  # smaller/condensed font
+UNDERLINE_ON = b"\x1b\x2d\x01"
+UNDERLINE_OFF = b"\x1b\x2d\x00"
+INVERT_ON = b"\x1d\x42\x01"  # white-on-black
+INVERT_OFF = b"\x1d\x42\x00"
+SIZE_NORMAL = b"\x1d\x21\x00"  # GS ! n: high nibble = width x2, low nibble = height x2
+SIZE_WIDE = b"\x1d\x21\x10"
+SIZE_TALL = b"\x1d\x21\x01"
+SIZE_BIG = b"\x1d\x21\x11"  # double width and height
 
 # Lines in TEXT_FILE may start with a "[tag,tag]" marker to style just that
-# line; supported tags are "bold" and "fontb". Unmarked lines print normal
-# weight in Font A.
+# line; supported tags: bold, fontb, underline, invert, wide, tall, big.
+# Unmarked lines print normal weight, Font A, normal size.
 LINE_TAG_PATTERN = re.compile(r"^\[([a-z0-9_,]+)\]\s*(.*)$", re.IGNORECASE)
 
 # ====================================================================
@@ -58,7 +66,22 @@ def parse_line(raw_line):
 
 
 def style_commands(tags):
-    return (BOLD_ON if "bold" in tags else BOLD_OFF) + (FONT_B if "fontb" in tags else FONT_A)
+    if "big" in tags:
+        size = SIZE_BIG
+    elif "wide" in tags:
+        size = SIZE_WIDE
+    elif "tall" in tags:
+        size = SIZE_TALL
+    else:
+        size = SIZE_NORMAL
+
+    return (
+        (BOLD_ON if "bold" in tags else BOLD_OFF)
+        + (FONT_B if "fontb" in tags else FONT_A)
+        + (UNDERLINE_ON if "underline" in tags else UNDERLINE_OFF)
+        + (INVERT_ON if "invert" in tags else INVERT_OFF)
+        + size
+    )
 
 
 def main():
@@ -84,7 +107,7 @@ def main():
             send(printer, style_commands(tags))
             send(printer, text.encode("cp437") + b"\n")
 
-        send(printer, BOLD_OFF + FONT_A)
+        send(printer, style_commands(set()))
         send(printer, UPSIDE_DOWN_OFF)
         send(printer, b"\n\n\n")
     finally:
