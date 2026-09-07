@@ -1,18 +1,28 @@
 """
-Print ownerless-property notices upside-down on the COM9 thermal printer.
+Print ownerless-property notices upside-down across three thermal printers.
+
+Each notice is split across three printers, one template part each:
+    printer 1 (PORT_1) <- notice_template_pt1.txt (the NOTICE)
+    printer 2 (PORT_2) <- notice_template_pt2.txt (the COURT DECISION)
+    printer 3 (PORT_3) <- notice_template_pt3.txt (the REAL ESTATE LISTING)
+Every INTERVAL_SECONDS (aligned to the wall clock, not to script start time),
+the next row of notices.csv is printed on printer 1, then printer 2, then
+printer 3 - each one only starts once the previous has finished printing.
+Once the last CSV row has been printed, it loops back to the first row.
+If a printer fails (unplugged, wrong port, etc.) the error is logged and
+the remaining printers still get their turn instead of the run aborting.
 
 Data flow (edit these, not this file, to change what gets printed):
-    notice_template.txt - the blueprint. Free text, blank-line-separated
-                           paragraphs, re-wrapped automatically. Placeholders
-                           {address}, {judge_name}, {decision} are filled in
-                           from the CSV; a paragraph containing only the
-                           literal "{STAMP}" is replaced by stamp_small.bmp.
-                           A paragraph may start with "[big]" or "[tall]" to
-                           print it at double size; otherwise it prints normal
-                           size.
-    notices.csv         - one row per notice: columns address, judge_name,
-                           decision. Add more columns/placeholders together
-                           in both files if you need extra fields later.
+    notice_template_pt{1,2,3}.txt - the blueprints. Free text, blank-line-
+                           separated paragraphs, re-wrapped automatically.
+                           Placeholders such as {address}, {judge_name},
+                           {decision} are filled in from the CSV; a
+                           paragraph containing only the literal "{STAMP}"
+                           is replaced by stamp_small.bmp. A paragraph may
+                           start with "[big]" or "[tall]" to print it at
+                           double size; otherwise it prints normal size.
+    notices.csv         - one row per notice. Add more columns/placeholders
+                           together in both files if you need extra fields.
 
 Why the reversed print order:
     This printer's upside-down mode (ESC { ) only rotates each printed
@@ -37,14 +47,25 @@ from escpos.printer import Serial as escSerial
 
 # ============================== CONFIG ==============================
 
-PORT = "COM9"
+# Serial ports for the three printers, one per template part.
+PORT_1 = "COM9"
+PORT_2 = "COM10"
+PORT_3 = "COM11"
 BAUDRATE = 9600
 
 BASE_DIR = Path(__file__).resolve().parent
-TEMPLATE_FILE = BASE_DIR / "notice_template.txt"
+PRINTERS = (
+    (PORT_1, BASE_DIR / "notice_template_pt1.txt"),
+    (PORT_2, BASE_DIR / "notice_template_pt2.txt"),
+    (PORT_3, BASE_DIR / "notice_template_pt3.txt"),
+)
 CSV_FILE = BASE_DIR / "notices.csv"
 STAMP_IMAGE = BASE_DIR / "stamp_small.bmp"
 STAMP_MARKER = "{STAMP}"
+
+# How often a new notice is printed, aligned to the wall clock (e.g. every
+# hour at :00, :06, :12, ...) rather than to whenever the script started.
+INTERVAL_SECONDS = 6 * 60
 
 LINE_WIDTH = 32  # characters per printed row
 FEED_LINES_AFTER = 6  # blank lines fed after each notice (cut point)
@@ -101,7 +122,9 @@ def render_blocks(template_text, data, width=LINE_WIDTH):
 
         filled = paragraph.format(**data)
         joined = " ".join(filled.split())
-        for line in textwrap.wrap(joined, width=width):
+        # "big" doubles character width too, so it fits half as many per line.
+        wrap_width = width // 2 if size_tag == "big" else width
+        for line in textwrap.wrap(joined, width=wrap_width):
             blocks.append(("text", line, size_tag))
         blocks.append(("text", "", size_tag))
 
@@ -111,9 +134,9 @@ def render_blocks(template_text, data, width=LINE_WIDTH):
     return blocks
 
 
-def connect():
+def connect(port):
     printer = escSerial(
-        devfile=PORT,
+        devfile=port,
         baudrate=BAUDRATE,
         bytesize=8,
         parity="N",
@@ -176,18 +199,64 @@ def load_rows(csv_file):
         return list(csv.DictReader(f))
 
 
-def main():
-    template_text = TEMPLATE_FILE.read_text(encoding="utf-8")
-    rows = load_rows(CSV_FILE)
+def _log(message):
+    print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {message}", flush=True)
 
-    printer = connect()
-    try:
-        for row in rows:
+
+def _next_tick(interval=INTERVAL_SECONDS):
+    """Return the next interval boundary aligned to the wall clock (epoch time)."""
+    return (time.time() // interval + 1) * interval
+
+
+def _sleep_until(timestamp):
+    delay = timestamp - time.time()
+    if delay > 0:
+        time.sleep(delay)
+
+
+def print_notice_row(row):
+    """Print one CSV row across all three printers, one after another.
+
+    Each printer only connects and prints once the previous one has
+    finished (and disconnected), so there's never more than one printer
+    active at a time. A failure on one printer (unplugged, wrong port,
+    bad template, ...) is logged and skipped rather than aborting the
+    whole row - the remaining printers still get their turn.
+    """
+    for port, template_file in PRINTERS:
+        try:
+            template_text = template_file.read_text(encoding="utf-8")
             blocks = render_blocks(template_text, row)
+            printer = connect(port)
+        except Exception as exc:
+            _log(f"ERROR: {port} could not start printing ({exc!r}); skipping it")
+            continue
+
+        try:
             print_blocks(printer, blocks)
-    finally:
-        printer.close()
+        except Exception as exc:
+            _log(f"ERROR: {port} failed while printing ({exc!r})")
+        finally:
+            try:
+                printer.close()
+            except Exception as exc:
+                _log(f"ERROR: {port} failed to close cleanly ({exc!r})")
+
+
+def main():
+    rows = load_rows(CSV_FILE)
+    row_index = 0
+    while True:
+        _sleep_until(_next_tick())
+        try:
+            print_notice_row(rows[row_index % len(rows)])
+        except Exception as exc:
+            _log(f"ERROR: unexpected failure printing row {row_index % len(rows)} ({exc!r})")
+        row_index += 1
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass

@@ -1,0 +1,23 @@
+[big]COURT DECISION
+
+On {inspection_date} an on-site inspection of the property was conducted, and a report was drawn up, according to which it was impossible to establish the fact of residence and the presence of owner (owners).
+
+According to information from the Rosreestr Office for the Donetsk People's Republic from
+
+{date}
+
+real estate property located at the address: 
+
+{address}
+
+, with an area of 695.1 sq.m., is therefore registered as an ownerless property.
+
+The interested parties did not appear at the court hearing and did not declare their right to the real estate property.
+
+Taking into account the above, the court comes to the conclusion that the application for recognition of the right of municipal ownership of an ownerless immovable property is {decision}
+
+DECISION: {decision}
+
+{STAMP}
+
+Judge: {judge_name}

@@ -1,0 +1,19 @@
+[big]NOTICE
+
+The Administration of the Mariupol Urban District informs [the public] of the identification of real-estate properties showing signs of being ownerless property.
+
+As of {notice_date}, the house (apartment) located at the following address:
+
+{address}
+
+shows signs of being ownerless property.
+
+The Administration of the Mariupol Urban District announces a search for the person(s) who consider themselves the owner, or who have rights to the above-mentioned real-estate property.
+
+The owner of the residential premises showing signs of being ownerless is requested, within 30 calendar days from the date this notice is posted, to appear IN PERSON at the Housing and Communal Services Department of the Administration of the Mariupol Urban District at {district} with the following documents:
+
+- a passport of a citizen of the Russian Federation or another identity document (original and copy);
+
+- documents establishing legal title to the residential premises (originals and copies).
+
+Office hours for {district} district: Tuesday, 09:00-11:00 and 13:00-15:00.

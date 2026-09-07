@@ -1,0 +1,27 @@
+[big]{complex_title}
+
+Floors: 
+
+{floors}
+
+Apartments: 
+
+{apartments}
+
+Parking spaces: 
+
+{parking_spaces}
+
+Apartments sold: 
+
+{apartments_sold}
+
+Avg. price per m2: 
+
+{avg_price_m2}
+
+Land use right: 
+
+{land_use_right}
+
+[big]SUBMIT AN APPLICATION NOW
