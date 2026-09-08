@@ -6,7 +6,7 @@ As of {notice_date}, the house (apartment) located at the following address:
 
 {address}
 
-shows signs of being ownerless property.
+[bold]shows signs of being ownerless property.
 
 The Administration of the Mariupol Urban District announces a search for the person(s) who consider themselves the owner, or who have rights to the above-mentioned real-estate property.
 

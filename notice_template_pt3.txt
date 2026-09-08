@@ -1,27 +1,29 @@
+[big][bold] Property for sale
+
 [big]{complex_title}
 
-Floors: {floors}
+» Floors: {floors}
 
-Apartments: {apartments}
+» Apartments: {apartments}
 
-Parking spaces: {parking_spaces}
+» Parking spaces: {parking_spaces}
 
-Apartments sold: {apartments_sold}
+» Apartments sold: {apartments_sold}
 
-Avg. price per m2: {avg_price_m2}
+» Avg. price per m2: {avg_price_m2}
 
-Land use right: {land_use_right}
+» Land use right: {land_use_right}
 
 
 
-DOCUMENTS AND CONSTRUCTION PROGRESS
+[bold]DOCUMENTS AND CONSTRUCTION PROGRESS
 
-Project Declaration No. {project_declaration_no} dated {project_declaration_date} - current version
+√ Project Declaration No. {project_declaration_no} dated {project_declaration_date} - current version
 
-Building Permit No. {building_permit_no} dated {building_permit_date} - valid until {building_permit_valid_until}
+√ Building Permit No. {building_permit_no} dated {building_permit_date} - valid until {building_permit_valid_until}
 
-Document completeness on nash.dom.rf portal: Complete
+√ Document completeness on nash.dom.rf portal: Complete
 
-Construction progress photos up to date: August 2026
+√ Construction progress photos up to date: August 2026
 
 [big]SUBMIT AN APPLICATION NOW

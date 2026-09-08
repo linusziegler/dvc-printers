@@ -16,7 +16,7 @@ The interested parties did not appear at the court hearing and did not declare t
 
 Taking into account the above, the court comes to the conclusion that the application for recognition of the right of municipal ownership of an ownerless immovable property is {decision}
 
-DECISION: {decision}
+[bold]DECISION: {decision}
 
 {STAMP}
 

@@ -20,7 +20,9 @@ Data flow (edit these, not this file, to change what gets printed):
                            paragraph containing only the literal "{STAMP}"
                            is replaced by stamp_small.bmp. A paragraph may
                            start with "[big]" or "[tall]" to print it at
-                           double size; otherwise it prints normal size.
+                           double size, and/or "[bold]" to emphasize it
+                           (e.g. "[big][bold]"); otherwise it prints normal
+                           size, not bold.
     notices.csv         - one row per notice. Add more columns/placeholders
                            together in both files if you need extra fields.
 
@@ -88,8 +90,29 @@ SIZE_COMMANDS = {
     "big": b"\x1d\x21\x11",
 }
 
-# A paragraph may start with one of these tags in brackets to size it.
-PARAGRAPH_TAG_PATTERN = re.compile(r"^\[(big|tall|normal)\]\s*", re.IGNORECASE)
+# Raw ESC/POS emphasized (bold) mode command (ESC E n).
+BOLD_ON = b"\x1b\x45\x01"
+BOLD_OFF = b"\x1b\x45\x00"
+
+# A paragraph may start with one or more of these tags in brackets, e.g.
+# "[big]", "[bold]", or "[big][bold]" combined. Size tags are mutually
+# exclusive (the last one wins); "bold" stacks with any size.
+PARAGRAPH_TAG_PATTERN = re.compile(r"^\[(big|tall|normal|bold)\]\s*", re.IGNORECASE)
+
+
+def _parse_paragraph_tags(paragraph):
+    """Strip leading [tag] markers, returning (size_tag, bold, rest_of_text)."""
+    size_tag, bold = None, False
+    while True:
+        match = PARAGRAPH_TAG_PATTERN.match(paragraph)
+        if not match:
+            return size_tag, bold, paragraph
+        tag = match.group(1).lower()
+        if tag == "bold":
+            bold = True
+        else:
+            size_tag = tag
+        paragraph = paragraph[match.end():]
 
 # ====================================================================
 
@@ -97,11 +120,11 @@ PARAGRAPH_TAG_PATTERN = re.compile(r"^\[(big|tall|normal)\]\s*", re.IGNORECASE)
 def render_blocks(template_text, data, width=LINE_WIDTH):
     """Turn the template + one CSV row into an ordered list of print blocks.
 
-    Each block is ("text", line, size_tag) or ("image", path, None).
+    Each block is ("text", line, size_tag, bold) or ("image", path, None, None).
     Paragraphs are separated by blank lines in the template and re-wrapped
     to `width`; a paragraph that is only STAMP_MARKER becomes an image
-    block instead. A leading "[big]"/"[tall]" marker sizes the whole
-    paragraph.
+    block instead. Leading "[big]"/"[tall]"/"[bold]" markers (stackable,
+    e.g. "[big][bold]") size and/or emphasize the whole paragraph.
     """
     blocks = []
     paragraphs = re.split(r"\n\s*\n", template_text.strip())
@@ -110,23 +133,18 @@ def render_blocks(template_text, data, width=LINE_WIDTH):
         paragraph = paragraph.strip()
 
         if paragraph == STAMP_MARKER:
-            blocks.append(("image", STAMP_IMAGE, None))
+            blocks.append(("image", STAMP_IMAGE, None, None))
             continue
 
-        tag_match = PARAGRAPH_TAG_PATTERN.match(paragraph)
-        if tag_match:
-            size_tag = tag_match.group(1).lower()
-            paragraph = paragraph[tag_match.end():]
-        else:
-            size_tag = None
+        size_tag, bold, paragraph = _parse_paragraph_tags(paragraph)
 
         filled = paragraph.format(**data)
         joined = " ".join(filled.split())
         # "big" doubles character width too, so it fits half as many per line.
         wrap_width = width // 2 if size_tag == "big" else width
         for line in textwrap.wrap(joined, width=wrap_width):
-            blocks.append(("text", line, size_tag))
-        blocks.append(("text", "", size_tag))
+            blocks.append(("text", line, size_tag, bold))
+        blocks.append(("text", "", size_tag, bold))
 
     while blocks and blocks[-1][:2] == ("text", ""):
         blocks.pop()
@@ -171,9 +189,10 @@ def print_blocks(printer, blocks):
     printer._raw(UPSIDE_DOWN_ON)
     _send(printer)
 
-    for kind, value, size_tag in reversed(blocks):
+    for kind, value, size_tag, bold in reversed(blocks):
         if kind == "text":
             printer._raw(SIZE_COMMANDS[size_tag])
+            printer._raw(BOLD_ON if bold else BOLD_OFF)
             _text_line(printer, value)
             _send(printer)
         else:
@@ -188,6 +207,7 @@ def print_blocks(printer, blocks):
             _send(printer, delay=IMAGE_DELAY)
 
     printer._raw(SIZE_COMMANDS[None])
+    printer._raw(BOLD_OFF)
     printer._raw(UPSIDE_DOWN_OFF)
     _send(printer)
     printer._raw(b"\n" * FEED_LINES_AFTER)

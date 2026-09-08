@@ -121,7 +121,7 @@ def test_line_widths():
     for template_file in TEMPLATE_FILES:
         text = template_file.read_text(encoding="utf-8")
         for row in rows:
-            for kind, value, size_tag in pn.render_blocks(text, row):
+            for kind, value, size_tag, _ in pn.render_blocks(text, row):
                 if kind != "text":
                     continue
                 limit = pn.LINE_WIDTH // 2 if size_tag == "big" else pn.LINE_WIDTH
@@ -142,7 +142,7 @@ def test_stamp_marker_isolated():
             pt2_text = template_file.read_text(encoding="utf-8")
     assert pt2_text is not None, "notice_template_pt2.txt not wired to a printer"
     blocks = pn.render_blocks(pt2_text, rows[0])
-    kinds = [k for k, _, _ in blocks]
+    kinds = [k for k, _, _, _ in blocks]
     assert "image" in kinds, "STAMP paragraph did not become an image block"
 
 
@@ -156,7 +156,7 @@ def test_cp437_losslessness():
     for template_file in TEMPLATE_FILES:
         text = template_file.read_text(encoding="utf-8")
         for row in rows:
-            for kind, value, _ in pn.render_blocks(text, row):
+            for kind, value, _, _ in pn.render_blocks(text, row):
                 if kind != "text" or not value:
                     continue
                 roundtrip = value.encode("cp437", errors="replace").decode("cp437")
