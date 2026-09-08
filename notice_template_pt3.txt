@@ -16,7 +16,7 @@
 
 
 
-[bold]DOCUMENTS AND CONSTRUCTION PROGRESS
+[tall][bold]DOCUMENTS AND CONSTRUCTION PROGRESS
 
 √ Project Declaration No. {project_declaration_no} dated {project_declaration_date} - current version
 
