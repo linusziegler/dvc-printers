@@ -23,7 +23,9 @@ Data flow (edit these, not this file, to change what gets printed):
                            replaced by images/{notice_number}_1.png or
                            _2.png (notice_number = the row's 1-based
                            position in notices.csv), resized to the print
-                           head width and dithered to 1-bit on the fly. A
+                           head width and dithered to 1-bit on the fly; a
+                           paragraph containing only "[newline]" prints a
+                           single blank line, for extra spacing. A
                            paragraph may start with "[big]" or "[tall]" to
                            print it at double size, and/or "[bold]" to
                            emphasize it (e.g. "[big][bold]"); otherwise it
@@ -72,6 +74,7 @@ PRINTERS = (
 CSV_FILE = BASE_DIR / "notices.csv"
 STAMP_IMAGE = BASE_DIR / "stamp_small.bmp"
 STAMP_MARKER = "{STAMP}"
+NEWLINE_MARKER = "[newline]"  # a paragraph containing only this prints one blank line
 
 # Per-notice photos: images/{notice_number}_1.png, images/{notice_number}_2.png,
 # referenced in a template by an isolated "{image_1}"/"{image_2}" paragraph.
@@ -140,8 +143,10 @@ def render_blocks(template_text, data, notice_number=1, width=LINE_WIDTH):
     Each block is ("text", line, size_tag, bold) or ("image", path, None, None).
     Paragraphs are separated by blank lines in the template and re-wrapped
     to `width`; a paragraph that is only STAMP_MARKER becomes an image
-    block instead, and a paragraph that is only "{image_1}"/"{image_2}"/...
-    becomes a block for images/{notice_number}_{n}.png. Leading
+    block instead, a paragraph that is only "{image_1}"/"{image_2}"/...
+    becomes a block for images/{notice_number}_{n}.png, and a paragraph
+    that is only "[newline]" becomes one blank printed line (add several
+    such paragraphs to space out a template further). Leading
     "[big]"/"[tall]"/"[bold]" markers (stackable, e.g. "[big][bold]") size
     and/or emphasize the whole paragraph.
     """
@@ -153,6 +158,10 @@ def render_blocks(template_text, data, notice_number=1, width=LINE_WIDTH):
 
         if paragraph == STAMP_MARKER:
             blocks.append(("image", STAMP_IMAGE, None, None))
+            continue
+
+        if paragraph.lower() == NEWLINE_MARKER:
+            blocks.append(("text", "", None, False))
             continue
 
         image_match = NOTICE_IMAGE_PATTERN.match(paragraph)

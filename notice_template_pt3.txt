@@ -1,6 +1,11 @@
 [big][bold] PROPERTY FOR SALE
 
+[newline]
+
 {image_1}
+
+[newline]
+[newline]
 
 [big]{complex_title}
 
@@ -28,6 +33,10 @@
 
 √ Construction progress photos up to date: August 2026
 
+[newline]
+
 {image_2}
+
+[newline]
 
 [big]SUBMIT AN APPLICATION NOW
