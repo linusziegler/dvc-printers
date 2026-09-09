@@ -95,7 +95,7 @@ def test_csv_matches_template_placeholders():
         placeholders = {
             field
             for _, field, _, _ in formatter.parse(text)
-            if field and field != "STAMP"
+            if field and field != "STAMP" and not pn.NOTICE_IMAGE_PATTERN.match("{" + field + "}")
         }
         missing = placeholders - fieldnames
         assert not missing, f"{template_file.name} needs columns not in CSV: {missing}"
@@ -258,7 +258,7 @@ def test_main_loop_cycles_rows():
     call_count = {"n": 0}
     STOP_AFTER = len(rows) + 3  # run past a full cycle to confirm wraparound
 
-    def fake_print_notice_row(row):
+    def fake_print_notice_row(row, notice_number=1):
         seen_rows.append(row)
         call_count["n"] += 1
         if call_count["n"] >= STOP_AFTER:
@@ -333,7 +333,7 @@ def test_main_loop_survives_row_failure():
     rows = pn.load_rows(pn.CSV_FILE)
     call_count = {"n": 0}
 
-    def flaky_print_notice_row(row):
+    def flaky_print_notice_row(row, notice_number=1):
         call_count["n"] += 1
         if call_count["n"] == 2:
             raise RuntimeError("simulated failure on the 2nd tick")

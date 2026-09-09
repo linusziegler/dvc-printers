@@ -1,5 +1,7 @@
 [big][bold] PROPERTY FOR SALE
 
+{image_1}
+
 [big]{complex_title}
 
 » Floors: {floors}
@@ -25,5 +27,7 @@
 √ Document completeness on nash.dom.rf portal: Complete
 
 √ Construction progress photos up to date: August 2026
+
+{image_2}
 
 [big]SUBMIT AN APPLICATION NOW

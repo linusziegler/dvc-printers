@@ -18,13 +18,21 @@ Data flow (edit these, not this file, to change what gets printed):
                            Placeholders such as {address}, {judge_name},
                            {decision} are filled in from the CSV; a
                            paragraph containing only the literal "{STAMP}"
-                           is replaced by stamp_small.bmp. A paragraph may
-                           start with "[big]" or "[tall]" to print it at
-                           double size, and/or "[bold]" to emphasize it
-                           (e.g. "[big][bold]"); otherwise it prints normal
-                           size, not bold.
+                           is replaced by stamp_small.bmp; a paragraph
+                           containing only "{image_1}" or "{image_2}" is
+                           replaced by images/{notice_number}_1.png or
+                           _2.png (notice_number = the row's 1-based
+                           position in notices.csv), resized to the print
+                           head width and dithered to 1-bit on the fly. A
+                           paragraph may start with "[big]" or "[tall]" to
+                           print it at double size, and/or "[bold]" to
+                           emphasize it (e.g. "[big][bold]"); otherwise it
+                           prints normal size, not bold.
     notices.csv         - one row per notice. Add more columns/placeholders
                            together in both files if you need extra fields.
+    images/              - per-notice photos, named {notice_number}_1.png
+                           and {notice_number}_2.png (any size/format PIL
+                           can open; transparency is flattened onto white).
 
 Why the reversed print order:
     This printer's upside-down mode (ESC { ) only rotates each printed
@@ -64,6 +72,15 @@ PRINTERS = (
 CSV_FILE = BASE_DIR / "notices.csv"
 STAMP_IMAGE = BASE_DIR / "stamp_small.bmp"
 STAMP_MARKER = "{STAMP}"
+
+# Per-notice photos: images/{notice_number}_1.png, images/{notice_number}_2.png,
+# referenced in a template by an isolated "{image_1}"/"{image_2}" paragraph.
+IMAGES_DIR = BASE_DIR / "images"
+NOTICE_IMAGE_PATTERN = re.compile(r"^\{image_(\d+)\}$")
+
+# Print head width in dots (58mm thermal printer), same as the pre-sized
+# stamp bitmaps; arbitrary source photos are resized down/up to match.
+PRINTER_WIDTH_PX = 384
 
 # How often a new notice is printed, aligned to the wall clock (e.g. every
 # hour at :00, :06, :12, ...) rather than to whenever the script started.
@@ -117,14 +134,16 @@ def _parse_paragraph_tags(paragraph):
 # ====================================================================
 
 
-def render_blocks(template_text, data, width=LINE_WIDTH):
+def render_blocks(template_text, data, notice_number=1, width=LINE_WIDTH):
     """Turn the template + one CSV row into an ordered list of print blocks.
 
     Each block is ("text", line, size_tag, bold) or ("image", path, None, None).
     Paragraphs are separated by blank lines in the template and re-wrapped
     to `width`; a paragraph that is only STAMP_MARKER becomes an image
-    block instead. Leading "[big]"/"[tall]"/"[bold]" markers (stackable,
-    e.g. "[big][bold]") size and/or emphasize the whole paragraph.
+    block instead, and a paragraph that is only "{image_1}"/"{image_2}"/...
+    becomes a block for images/{notice_number}_{n}.png. Leading
+    "[big]"/"[tall]"/"[bold]" markers (stackable, e.g. "[big][bold]") size
+    and/or emphasize the whole paragraph.
     """
     blocks = []
     paragraphs = re.split(r"\n\s*\n", template_text.strip())
@@ -134,6 +153,12 @@ def render_blocks(template_text, data, width=LINE_WIDTH):
 
         if paragraph == STAMP_MARKER:
             blocks.append(("image", STAMP_IMAGE, None, None))
+            continue
+
+        image_match = NOTICE_IMAGE_PATTERN.match(paragraph)
+        if image_match:
+            image_path = IMAGES_DIR / f"{notice_number}_{image_match.group(1)}.png"
+            blocks.append(("image", image_path, None, None))
             continue
 
         size_tag, bold, paragraph = _parse_paragraph_tags(paragraph)
@@ -150,6 +175,31 @@ def render_blocks(template_text, data, width=LINE_WIDTH):
         blocks.pop()
 
     return blocks
+
+
+def _load_printer_image(path):
+    """Load an arbitrary image file and prepare it as a printer-ready 1-bit bitmap.
+
+    Flattens transparency onto white, resizes to the print head's pixel
+    width (preserving aspect ratio), and dithers down to 1-bit - the same
+    state stamp_small.bmp was already pre-baked into by hand.
+    """
+    image = Image.open(path)
+
+    if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
+        image = image.convert("RGBA")
+        flattened = Image.new("RGB", image.size, "white")
+        flattened.paste(image, mask=image.split()[-1])
+        image = flattened
+    else:
+        image = image.convert("RGB")
+
+    if image.width != PRINTER_WIDTH_PX:
+        ratio = PRINTER_WIDTH_PX / image.width
+        new_height = max(1, round(image.height * ratio))
+        image = image.resize((PRINTER_WIDTH_PX, new_height), Image.Resampling.LANCZOS)
+
+    return image.convert("1")
 
 
 def connect(port):
@@ -197,7 +247,7 @@ def print_blocks(printer, blocks):
             _send(printer)
         else:
             # Raster images aren't affected by ESC {, so rotate them by hand.
-            image = Image.open(value).convert("1").rotate(180)
+            image = _load_printer_image(value).rotate(180)
             printer.image(
                 image,
                 impl="bitImageRaster",
@@ -234,7 +284,7 @@ def _sleep_until(timestamp):
         time.sleep(delay)
 
 
-def print_notice_row(row):
+def print_notice_row(row, notice_number=1):
     """Print one CSV row across all three printers, one after another.
 
     Each printer only connects and prints once the previous one has
@@ -246,7 +296,7 @@ def print_notice_row(row):
     for port, template_file in PRINTERS:
         try:
             template_text = template_file.read_text(encoding="utf-8")
-            blocks = render_blocks(template_text, row)
+            blocks = render_blocks(template_text, row, notice_number)
             printer = connect(port)
         except Exception as exc:
             _log(f"ERROR: {port} could not start printing ({exc!r}); skipping it")
@@ -268,10 +318,11 @@ def main():
     row_index = 0
     while True:
         _sleep_until(_next_tick())
+        current_index = row_index % len(rows)
         try:
-            print_notice_row(rows[row_index % len(rows)])
+            print_notice_row(rows[current_index], current_index + 1)
         except Exception as exc:
-            _log(f"ERROR: unexpected failure printing row {row_index % len(rows)} ({exc!r})")
+            _log(f"ERROR: unexpected failure printing row {current_index} ({exc!r})")
         row_index += 1
 
 
