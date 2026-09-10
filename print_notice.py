@@ -54,14 +54,14 @@ import textwrap
 import time
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageEnhance
 from escpos.printer import Serial as escSerial
 
 # ============================== CONFIG ==============================
 
 # Serial ports for the three printers, one per template part.
-PORT_1 = "COM9"
-PORT_2 = "COM10"
+PORT_1 = "COM10"
+PORT_2 = "COM9"
 PORT_3 = "COM11"
 BAUDRATE = 9600
 
@@ -84,6 +84,14 @@ NOTICE_IMAGE_PATTERN = re.compile(r"^\{image_(\d+)\}$")
 # Print head width in dots (58mm thermal printer), same as the pre-sized
 # stamp bitmaps; arbitrary source photos are resized down/up to match.
 PRINTER_WIDTH_PX = 384
+
+# Contrast multiplier applied before dithering (>1 pushes photos towards
+# pure black/white, since the printer has no real grayscale).
+IMAGE_CONTRAST_FACTOR = 1.8
+# Dithering is done at 1/N of the print resolution, then scaled back up with
+# nearest-neighbor - this trades fine detail for bold, high-contrast dots
+# instead of a fine, flat-looking Floyd-Steinberg pattern.
+DITHER_DOWNSCALE = 5
 
 # How often a new notice is printed, aligned to the wall clock (e.g. every
 # hour at :00, :06, :12, ...) rather than to whenever the script started.
@@ -190,8 +198,10 @@ def _load_printer_image(path):
     """Load an arbitrary image file and prepare it as a printer-ready 1-bit bitmap.
 
     Flattens transparency onto white, resizes to the print head's pixel
-    width (preserving aspect ratio), and dithers down to 1-bit - the same
-    state stamp_small.bmp was already pre-baked into by hand.
+    width (preserving aspect ratio), boosts contrast, and dithers at a
+    fraction of that resolution before scaling back up - a bolder,
+    higher-contrast look than dithering at full resolution, similar to
+    the pre-baked stamp_small.bmp.
     """
     image = Image.open(path)
 
@@ -208,7 +218,14 @@ def _load_printer_image(path):
         new_height = max(1, round(image.height * ratio))
         image = image.resize((PRINTER_WIDTH_PX, new_height), Image.Resampling.LANCZOS)
 
-    return image.convert("1")
+    grayscale = ImageEnhance.Contrast(image.convert("L")).enhance(IMAGE_CONTRAST_FACTOR)
+
+    small_size = (
+        max(1, grayscale.width // DITHER_DOWNSCALE),
+        max(1, grayscale.height // DITHER_DOWNSCALE),
+    )
+    dithered_small = grayscale.resize(small_size, Image.Resampling.BILINEAR).convert("1")
+    return dithered_small.resize(image.size, Image.Resampling.NEAREST)
 
 
 def connect(port):

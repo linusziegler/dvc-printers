@@ -1,4 +1,4 @@
-[big]COURT DECISION
+[big][bold]COURT DECISION
 
 On {inspection_date} an on-site inspection of the property was conducted, and a report was drawn up, according to which it was impossible to establish the fact of residence and the presence of owner (owners).
 
